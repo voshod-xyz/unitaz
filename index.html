@@ -1,0 +1,1942 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Toilet Simulator - HD Realism Edition</title>
+    <!-- Tailwind CSS for UI Layout -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls for camera manipulation -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            user-select: none;
+            background-color: #090d16;
+        }
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+        .hud-glass {
+            background: rgba(15, 23, 42, 0.82);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        .btn-action {
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+            touch-action: manipulation;
+        }
+        .btn-action:active {
+            transform: scale(0.94);
+        }
+        .btn-yellow {
+            background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%);
+            box-shadow: 0 4px 18px rgba(234, 179, 8, 0.35);
+        }
+        .btn-yellow:hover {
+            background: linear-gradient(135deg, #facc15 0%, #d97706 100%);
+        }
+        .btn-brown {
+            background: linear-gradient(135deg, #854d0e 0%, #582f0e 100%);
+            box-shadow: 0 4px 18px rgba(133, 77, 14, 0.4);
+        }
+        .btn-brown:hover {
+            background: linear-gradient(135deg, #a16207 0%, #713f12 100%);
+        }
+        .btn-blue {
+            background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+            box-shadow: 0 4px 22px rgba(2, 132, 199, 0.45);
+        }
+        .btn-blue:hover {
+            background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+        }
+        .glow-active {
+            box-shadow: 0 0 24px rgba(234, 179, 8, 0.85);
+        }
+    </style>
+</head>
+<body class="text-white">
+    <!-- 3D Canvas Viewport -->
+    <div id="canvas-container"></div>
+
+    <!-- UI Overlay Layer -->
+    <div class="relative z-10 flex flex-col justify-between h-full p-4 pointer-events-none">
+        
+        <!-- Header Bar -->
+        <div class="flex justify-between items-start w-full max-w-5xl mx-auto pointer-events-auto">
+            <div class="hud-glass p-3 px-5 rounded-2xl flex items-center gap-3 shadow-2xl">
+                <span class="text-3xl">🚽</span>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight tracking-wide text-slate-100">3D Туалет Симулятор HD</h1>
+                    <p class="text-xs text-slate-400">Реалистичная физика кала человека, микротекстуры и PBR-материалы</p>
+                </div>
+            </div>
+
+            <!-- Sound & Preset Controls -->
+            <div class="hud-glass p-2 rounded-2xl flex items-center gap-2 shadow-xl">
+                <button id="btn-sound" class="btn-action p-2 px-3 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 flex items-center gap-1.5">
+                    <span id="sound-icon">🔊</span> <span id="sound-label">Звук Вкл</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Left Side Stats & Physics HUD -->
+        <div class="pointer-events-auto self-start mt-4 ml-0 md:ml-4 flex flex-col gap-2 max-w-xs w-full">
+            <div class="hud-glass p-4 rounded-2xl flex flex-col gap-3 shadow-2xl">
+                <div class="flex justify-between text-xs text-slate-300 font-medium">
+                    <span>Заполнение чаши:</span>
+                    <span id="stat-water-level" class="font-bold text-cyan-400">60%</span>
+                </div>
+                <div class="w-full bg-slate-800/90 rounded-full h-2.5 overflow-hidden border border-slate-700/60">
+                    <div id="bar-water-level" class="bg-cyan-500 h-full transition-all duration-200" style="width: 60%"></div>
+                </div>
+
+                <div class="flex justify-between text-xs text-slate-300 font-medium">
+                    <span>Состав жидкости:</span>
+                    <span id="stat-mix-status" class="font-bold text-sky-400">Чистая вода</span>
+                </div>
+
+                <div class="flex justify-between text-xs text-slate-300 font-medium border-t border-slate-700/50 pt-2">
+                    <span>Форма кала (Scale):</span>
+                    <span id="stat-bristol-type" class="font-bold text-amber-400">Тип 4 (Норма)</span>
+                </div>
+
+                <div class="flex justify-between text-xs text-slate-300 font-medium border-t border-slate-700/40 pt-1">
+                    <span>Состояние пола:</span>
+                    <span id="stat-overflow-status" class="font-bold text-emerald-400">Сухо</span>
+                </div>
+            </div>
+
+            <!-- Camera View Presets -->
+            <div class="hud-glass p-2 rounded-2xl flex justify-between gap-1 shadow-xl">
+                <button id="cam-preset-1" class="btn-action text-xs px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex-1 font-medium border border-slate-700">3D Вид</button>
+                <button id="cam-preset-2" class="btn-action text-xs px-2.5 py-1.5 rounded-lg bg-slate-800/60 hover:bg-slate-700 text-slate-300 flex-1 font-medium border border-slate-700/50">Сверху</button>
+                <button id="cam-preset-3" class="btn-action text-xs px-2.5 py-1.5 rounded-lg bg-slate-800/60 hover:bg-slate-700 text-slate-300 flex-1 font-medium border border-slate-700/50">Сбоку</button>
+                <button id="cam-preset-4" class="btn-action text-xs px-2.5 py-1.5 rounded-lg bg-slate-800/60 hover:bg-slate-700 text-slate-300 flex-1 font-medium border border-slate-700/50">Чаша</button>
+            </div>
+        </div>
+
+        <!-- Bottom Action Controls -->
+        <div class="pointer-events-auto w-full max-w-2xl mx-auto mb-2">
+            <div class="hud-glass p-3 rounded-3xl flex items-center justify-around gap-2 shadow-2xl">
+                
+                <!-- Button Pee -->
+                <button id="btn-pee" class="btn-action btn-yellow text-white font-bold py-3 px-3 md:px-4 rounded-2xl flex flex-col items-center gap-1 flex-1 select-none relative group">
+                    <span class="absolute -top-2 bg-yellow-600/90 text-[10px] px-1.5 py-0.5 rounded-full font-mono border border-yellow-300/40">1 / Q</span>
+                    <span class="text-2xl transition-transform group-hover:scale-110">🟡</span>
+                    <span class="text-xs md:text-sm tracking-wider uppercase">Ссать</span>
+                </button>
+
+                <!-- Button Poop -->
+                <button id="btn-poop" class="btn-action btn-brown text-white font-bold py-3 px-3 md:px-4 rounded-2xl flex flex-col items-center gap-1 flex-1 select-none relative group">
+                    <span class="absolute -top-2 bg-amber-900/90 text-[10px] px-1.5 py-0.5 rounded-full font-mono border border-amber-400/40">2 / W</span>
+                    <span class="text-2xl transition-transform group-hover:scale-110">💩</span>
+                    <span class="text-xs md:text-sm tracking-wider uppercase">Срать</span>
+                </button>
+
+                <!-- Button Flush -->
+                <button id="btn-flush" class="btn-action btn-blue text-white font-black py-3.5 px-4 md:px-5 rounded-2xl flex flex-col items-center gap-1 flex-1 select-none relative group">
+                    <span class="absolute -top-2 bg-sky-700/90 text-[10px] px-1.5 py-0.5 rounded-full font-mono border border-sky-300/40">Enter</span>
+                    <span class="text-2xl transition-transform group-hover:scale-110">🌀</span>
+                    <span class="text-xs md:text-sm tracking-widest uppercase">СМЫВ</span>
+                </button>
+
+                <!-- Button Lid Control -->
+                <button id="btn-lid" class="btn-action bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 font-bold py-3 px-2 rounded-2xl flex flex-col items-center gap-1 flex-1 select-none relative group">
+                    <span class="absolute -top-2 bg-slate-700/90 text-[10px] px-1.5 py-0.5 rounded-full font-mono border border-slate-500/40">Space</span>
+                    <span id="lid-icon" class="text-2xl transition-transform group-hover:scale-110">🚽</span>
+                    <span id="lid-text" class="text-xs text-center tracking-wide leading-tight">Крышка: Откр</span>
+                </button>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const BOWL_CENTER_Z = -0.25;
+        const RIM_HEIGHT = 0.78;
+        
+        function getWaterSurfaceY() {
+            return Math.min(RIM_HEIGHT + 0.012, state.waterLevel) + 0.01;
+        }
+
+        const state = {
+            coverMode: 0, // 0: Both Open, 1: Seat Down / Lid Open, 2: Both Closed
+            targetSeatAngle: -1.85,
+            targetLidAngle: -1.85,
+            currentSeatAngle: -1.85,
+            currentLidAngle: -1.85,
+            isPeeing: false,
+            waterLevel: 0.48, 
+            baseWaterLevel: 0.48,
+            overflowWaterLevel: RIM_HEIGHT,
+            maxWaterLevel: 1.15,
+            
+            // Fluid composition
+            waterVol: 1.0,
+            peeVol: 0.0,
+            poopVol: 0.0,
+            
+            floorPuddleVol: 0.0,
+            
+            poopObjects: [],
+            peeParticles: [],
+            splatters: [],
+            floorSplatters: [],
+            spillCascades: [],
+            
+            isFlushing: false,
+            flushPhase: 0,
+            flushTimer: 0,
+            soundEnabled: true,
+            lastSpawnType: 'Тип 4 (Норма)'
+        };
+
+        const ripples = [];
+        const splashParticles = [];
+
+        // DOM Element References
+        const container = document.getElementById('canvas-container');
+        const btnPee = document.getElementById('btn-pee');
+        const btnPoop = document.getElementById('btn-poop');
+        const btnFlush = document.getElementById('btn-flush');
+        const btnLid = document.getElementById('btn-lid');
+        const btnSound = document.getElementById('btn-sound');
+        const soundIcon = document.getElementById('sound-icon');
+        const soundLabel = document.getElementById('sound-label');
+
+        const barWater = document.getElementById('bar-water-level');
+        const statWater = document.getElementById('stat-water-level');
+        const statMix = document.getElementById('stat-mix-status');
+        const statOverflow = document.getElementById('stat-overflow-status');
+        const statBristol = document.getElementById('stat-bristol-type');
+
+        // Three.js Core Variables
+        let scene, camera, renderer, controls;
+        let toiletGroup, lidGroup, seatGroup, waterMesh, floorPuddleMesh, floorSplatGroup;
+        let waterMaterial, floorPuddleMaterial, stoolMaterial;
+        let proceduralTextures = {};
+
+        function generateProceduralTextures() {
+            // 1. Stool Surface Bump & Roughness Texture (Organic cracks, grain, wet shine)
+            const stoolCanvas = document.createElement('canvas');
+            stoolCanvas.width = 512;
+            stoolCanvas.height = 512;
+            const sCtx = stoolCanvas.getContext('2d');
+            sCtx.fillStyle = '#808080';
+            sCtx.fillRect(0, 0, 512, 512);
+
+            // Add multi-scale noise for stool organic texture
+            for (let i = 0; i < 25000; i++) {
+                const x = Math.random() * 512;
+                const y = Math.random() * 512;
+                const r = Math.random() * 2.5 + 0.5;
+                const val = Math.floor(Math.random() * 110 + 70);
+                sCtx.fillStyle = `rgb(${val},${val},${val})`;
+                sCtx.beginPath();
+                sCtx.arc(x, y, r, 0, Math.PI * 2);
+                sCtx.fill();
+            }
+
+            // Draw micro-cracks and wrinkles
+            sCtx.strokeStyle = '#303030';
+            sCtx.lineWidth = 1.2;
+            for (let i = 0; i < 40; i++) {
+                sCtx.beginPath();
+                let cx = Math.random() * 512;
+                let cy = Math.random() * 512;
+                sCtx.moveTo(cx, cy);
+                for (let j = 0; j < 6; j++) {
+                    cx += (Math.random() - 0.5) * 40;
+                    cy += (Math.random() - 0.5) * 40;
+                    sCtx.lineTo(cx, cy);
+                }
+                sCtx.stroke();
+            }
+
+            const stoolBumpTex = new THREE.CanvasTexture(stoolCanvas);
+            stoolBumpTex.wrapS = THREE.RepeatWrapping;
+            stoolBumpTex.wrapT = THREE.RepeatWrapping;
+            stoolBumpTex.repeat.set(2, 2);
+
+            // 2. High Quality Bathroom Floor Tile Texture
+            const floorCanvas = document.createElement('canvas');
+            floorCanvas.width = 1024;
+            floorCanvas.height = 1024;
+            const fCtx = floorCanvas.getContext('2d');
+            
+            // Slate marble tiles
+            fCtx.fillStyle = '#1e293b';
+            fCtx.fillRect(0, 0, 1024, 1024);
+
+            const tileSize = 256;
+            for (let x = 0; x < 1024; x += tileSize) {
+                for (let y = 0; y < 1024; y += tileSize) {
+                    // Tile base with subtle gradient
+                    const grad = fCtx.createLinearGradient(x, y, x + tileSize, y + tileSize);
+                    grad.addColorStop(0, '#1e293b');
+                    grad.addColorStop(0.5, '#243044');
+                    grad.addColorStop(1, '#182232');
+                    fCtx.fillStyle = grad;
+                    fCtx.fillRect(x + 2, y + 2, tileSize - 4, tileSize - 4);
+
+                    // Subtle stone grain
+                    fCtx.fillStyle = 'rgba(255,255,255,0.02)';
+                    for (let n = 0; n < 300; n++) {
+                        fCtx.fillRect(x + Math.random() * tileSize, y + Math.random() * tileSize, 2, 2);
+                    }
+
+                    // Grout Lines
+                    fCtx.strokeStyle = '#0f172a';
+                    fCtx.lineWidth = 4;
+                    fCtx.strokeRect(x, y, tileSize, tileSize);
+                }
+            }
+
+            const floorTex = new THREE.CanvasTexture(floorCanvas);
+            floorTex.wrapS = THREE.RepeatWrapping;
+            floorTex.wrapT = THREE.RepeatWrapping;
+            floorTex.repeat.set(4, 4);
+
+            // Floor Bump Map
+            const floorBumpCanvas = document.createElement('canvas');
+            floorBumpCanvas.width = 512;
+            floorBumpCanvas.height = 512;
+            const fbCtx = floorBumpCanvas.getContext('2d');
+            fbCtx.fillStyle = '#808080';
+            fbCtx.fillRect(0, 0, 512, 512);
+            fbCtx.strokeStyle = '#000000';
+            fbCtx.lineWidth = 8;
+            const bTileSize = 128;
+            for (let x = 0; x < 512; x += bTileSize) {
+                for (let y = 0; y < 512; y += bTileSize) {
+                    fbCtx.strokeRect(x, y, bTileSize, bTileSize);
+                }
+            }
+            const floorBumpTex = new THREE.CanvasTexture(floorBumpCanvas);
+            floorBumpTex.wrapS = THREE.RepeatWrapping;
+            floorBumpTex.wrapT = THREE.RepeatWrapping;
+            floorBumpTex.repeat.set(4, 4);
+
+            // 3. Wall Subway Tile Texture
+            const wallCanvas = document.createElement('canvas');
+            wallCanvas.width = 1024;
+            wallCanvas.height = 1024;
+            const wCtx = wallCanvas.getContext('2d');
+            wCtx.fillStyle = '#334155';
+            wCtx.fillRect(0, 0, 1024, 1024);
+
+            const wW = 256;
+            const wH = 128;
+            let row = 0;
+            for (let y = 0; y < 1024; y += wH) {
+                const offsetX = (row % 2 === 0) ? 0 : wW / 2;
+                for (let x = -wW; x < 1024 + wW; x += wW) {
+                    const gx = x + offsetX;
+                    wCtx.fillStyle = '#3a4a5e';
+                    wCtx.fillRect(gx + 2, y + 2, wW - 4, wH - 4);
+                    wCtx.strokeStyle = '#1e293b';
+                    wCtx.lineWidth = 4;
+                    wCtx.strokeRect(gx, y, wW, wH);
+                }
+                row++;
+            }
+
+            const wallTex = new THREE.CanvasTexture(wallCanvas);
+            wallTex.wrapS = THREE.RepeatWrapping;
+            wallTex.wrapT = THREE.RepeatWrapping;
+            wallTex.repeat.set(3, 3);
+
+            proceduralTextures = {
+                stoolBump: stoolBumpTex,
+                floor: floorTex,
+                floorBump: floorBumpTex,
+                wall: wallTex
+            };
+        }
+
+        function getRenderPixelRatio() {
+            // Supersampling on ordinary displays, capped by pixel and GPU budgets.
+            const w = Math.max(1, window.innerWidth), h = Math.max(1, window.innerHeight);
+            const limit = renderer ? renderer.capabilities.maxTextureSize : 4096;
+            return Math.min(Math.max(1.5, window.devicePixelRatio || 1), 2.5,
+                Math.sqrt(10000000 / (w * h)), limit / w, limit / h);
+        }
+
+        function initScene() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x090d16);
+            scene.fog = new THREE.FogExp2(0x090d16, 0.07);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 50);
+            camera.position.set(0, 2.3, 2.9);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(getRenderPixelRatio());
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.15;
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.target.set(0, 0.7, BOWL_CENTER_Z);
+            controls.maxPolarAngle = Math.PI / 2 + 0.08; 
+            controls.minDistance = 0.9;
+            controls.maxDistance = 6.0;
+
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function initEnvironment() {
+            generateProceduralTextures();
+            Object.values(proceduralTextures).forEach(texture => {
+                texture.anisotropy = Math.min(16, renderer.capabilities.getMaxAnisotropy());
+                texture.minFilter = THREE.LinearMipmapLinearFilter;
+            });
+            proceduralTextures.floor.encoding = THREE.sRGBEncoding;
+            proceduralTextures.wall.encoding = THREE.sRGBEncoding;
+
+            const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambient);
+
+            // Key Ceiling Spotlight with soft realistic shadow
+            const spotLight = new THREE.SpotLight(0xfff7ed, 3.8);
+            spotLight.position.set(1.6, 5.0, 2.2);
+            spotLight.angle = Math.PI / 3.2;
+            spotLight.penumbra = 0.45;
+            spotLight.castShadow = true;
+            const shadowSize = Math.min(4096, renderer.capabilities.maxTextureSize);
+            spotLight.shadow.mapSize.set(shadowSize, shadowSize);
+            spotLight.shadow.camera.near = 0.5;
+            spotLight.shadow.camera.far = 10;
+            spotLight.shadow.bias = -0.00008;
+            spotLight.shadow.normalBias = 0.02;
+            scene.add(spotLight);
+
+            // Soft Fill Light from left
+            const fillLight = new THREE.DirectionalLight(0xe0f2fe, 1.1);
+            fillLight.position.set(-2.2, 3.5, 1.8);
+            scene.add(fillLight);
+
+            // Blue Rim Backlight for specular rim reflections
+            const rimLight = new THREE.DirectionalLight(0x38bdf8, 1.2);
+            rimLight.position.set(-1.8, 2.8, -3.2);
+            scene.add(rimLight);
+
+            // Warm subtle bounce light from floor
+            const bounceLight = new THREE.PointLight(0xfed7aa, 0.6, 4);
+            bounceLight.position.set(0, 0.2, 0.5);
+            scene.add(bounceLight);
+
+            // Tiled Floor with Bump Map & Roughness
+            const floorMat = new THREE.MeshStandardMaterial({
+                map: proceduralTextures.floor,
+                bumpMap: proceduralTextures.floorBump,
+                bumpScale: 0.012,
+                roughness: 0.25,
+                metalness: 0.08
+            });
+            const floor = new THREE.Mesh(new THREE.PlaneGeometry(12, 12), floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            // Container for Splatters on Floor
+            floorSplatGroup = new THREE.Group();
+            scene.add(floorSplatGroup);
+
+            // Floor Overflow Main Puddle Mesh
+            const puddleGeo = new THREE.CircleGeometry(1.0, 64);
+            floorPuddleMaterial = new THREE.MeshPhysicalMaterial({
+                color: 0x38bdf8,
+                transparent: true,
+                opacity: 0.0,
+                roughness: 0.01,
+                metalness: 0.02,
+                clearcoat: 1.0,
+                clearcoatRoughness: 0.01,
+                transmission: 0.6,
+                reflectivity: 0.95
+            });
+            floorPuddleMesh = new THREE.Mesh(puddleGeo, floorPuddleMaterial);
+            floorPuddleMesh.rotation.x = -Math.PI / 2;
+            floorPuddleMesh.position.set(0, 0.005, BOWL_CENTER_Z);
+            scene.add(floorPuddleMesh);
+
+            // Back Subway Tiled Wall
+            const wallMat = new THREE.MeshStandardMaterial({
+                map: proceduralTextures.wall,
+                roughness: 0.35,
+                metalness: 0.05
+            });
+            const backWall = new THREE.Mesh(new THREE.PlaneGeometry(12, 8), wallMat);
+            backWall.position.set(0, 4, -3);
+            backWall.receiveShadow = true;
+            scene.add(backWall);
+        }
+
+        function createToiletGeometry() {
+            toiletGroup = new THREE.Group();
+            scene.add(toiletGroup);
+
+            // Ultra realistic gloss porcelain material
+            const porcelainMat = new THREE.MeshPhysicalMaterial({
+                color: 0xf8fafc,
+                roughness: 0.06,
+                metalness: 0.02,
+                clearcoat: 1.0,
+                clearcoatRoughness: 0.03,
+                reflectivity: 0.95
+            });
+
+            // Porcelain Bowl Lathe Geometry
+            const points = [];
+            points.push(new THREE.Vector2(0.22, 0.0));  
+            points.push(new THREE.Vector2(0.34, 0.0));  
+            points.push(new THREE.Vector2(0.28, 0.35)); 
+            points.push(new THREE.Vector2(0.42, 0.75)); 
+            points.push(new THREE.Vector2(0.42, RIM_HEIGHT)); 
+            points.push(new THREE.Vector2(0.34, RIM_HEIGHT)); 
+            points.push(new THREE.Vector2(0.32, 0.70)); 
+            points.push(new THREE.Vector2(0.22, 0.42)); 
+            points.push(new THREE.Vector2(0.12, 0.30)); 
+            points.push(new THREE.Vector2(0.00, 0.28)); 
+
+            const latheGeo = new THREE.LatheGeometry(points, 128);
+            const bowlMesh = new THREE.Mesh(latheGeo, porcelainMat);
+            bowlMesh.scale.set(1.0, 1.0, 1.18);
+            bowlMesh.position.set(0, 0, BOWL_CENTER_Z);
+            bowlMesh.castShadow = true;
+            bowlMesh.receiveShadow = true;
+            toiletGroup.add(bowlMesh);
+
+            // Water Surface Mesh inside bowl with radial & height segments for wave simulation
+            // Radial surface tessellation: the old cylinder had only a triangle fan on top.
+            const waterGeo = new THREE.RingGeometry(0.0001, 0.33, 96, 20);
+            waterGeo.rotateX(-Math.PI / 2);
+            waterGeo.translate(0, 0.01, 0);
+            waterGeo.attributes.position.setUsage(THREE.DynamicDrawUsage);
+            
+            const posAttr = waterGeo.attributes.position;
+            waterGeo.userData = {
+                origY: new Float32Array(posAttr.count),
+                waveVel: new Float32Array(posAttr.count),
+                waveDisp: new Float32Array(posAttr.count)
+            };
+            for (let i = 0; i < posAttr.count; i++) {
+                waterGeo.userData.origY[i] = posAttr.getY(i);
+                waterGeo.userData.waveVel[i] = 0;
+                waterGeo.userData.waveDisp[i] = 0;
+            }
+
+            waterMaterial = new THREE.MeshPhysicalMaterial({
+                color: 0x38bdf8,
+                transparent: true,
+                opacity: 0.85,
+                roughness: 0.015,
+                metalness: 0.02,
+                clearcoat: 1.0,
+                clearcoatRoughness: 0.01,
+                transmission: 0.7,
+                ior: 1.333,
+                reflectivity: 0.95
+            });
+            waterMesh = new THREE.Mesh(waterGeo, waterMaterial);
+            waterMesh.position.set(0, state.waterLevel, BOWL_CENTER_Z);
+            waterMesh.scale.set(1.0, 1.0, 1.15);
+            toiletGroup.add(waterMesh);
+
+            // Toilet Tank
+            const tankGroup = new THREE.Group();
+            tankGroup.position.set(0, 1.25, -1.05);
+
+            const tankGeo = new THREE.BoxGeometry(0.82, 0.92, 0.44);
+            const tankMesh = new THREE.Mesh(tankGeo, porcelainMat);
+            tankMesh.castShadow = true;
+            tankMesh.receiveShadow = true;
+            tankGroup.add(tankMesh);
+
+            const tankLidGeo = new THREE.BoxGeometry(0.86, 0.10, 0.48);
+            const tankLidMesh = new THREE.Mesh(tankLidGeo, porcelainMat);
+            tankLidMesh.position.set(0, 0.49, 0);
+            tankLidMesh.castShadow = true;
+            tankGroup.add(tankLidMesh);
+
+            const chromeMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, metalness: 0.95, roughness: 0.08 });
+            const handleGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.04, 24);
+            const flushBtnMesh = new THREE.Mesh(handleGeo, chromeMat);
+            flushBtnMesh.rotation.x = Math.PI / 2;
+            flushBtnMesh.position.set(0.28, 0.25, 0.23);
+            tankGroup.add(flushBtnMesh);
+
+            toiletGroup.add(tankGroup);
+
+            // Hinge Pivot Assembly
+            const hingePivot = new THREE.Group();
+            hingePivot.position.set(0, RIM_HEIGHT + 0.01, -0.52);
+            toiletGroup.add(hingePivot);
+
+            const pinGeo = new THREE.CylinderGeometry(0.018, 0.018, 0.32, 24);
+            const pinMesh = new THREE.Mesh(pinGeo, chromeMat);
+            pinMesh.rotation.z = Math.PI / 2;
+            hingePivot.add(pinMesh);
+
+            const plasticMat = new THREE.MeshPhysicalMaterial({
+                color: 0xf8fafc, roughness: 0.12, metalness: 0.01, clearcoat: 0.9, clearcoatRoughness: 0.05
+            });
+
+            // Flat-trimmed lid and seat contour
+            const seatShape = new THREE.Shape();
+            const widthX = 0.35;
+            const backY = 0.02;   
+            const frontY = 0.74;  
+
+            seatShape.moveTo(-widthX + 0.06, backY);
+            seatShape.lineTo(widthX - 0.06, backY);
+            seatShape.quadraticCurveTo(widthX, backY, widthX, backY + 0.10);
+            seatShape.bezierCurveTo(widthX + 0.02, 0.40, widthX - 0.04, frontY, 0, frontY);
+            seatShape.bezierCurveTo(-widthX + 0.04, frontY, -widthX - 0.02, 0.40, -widthX, backY + 0.10);
+            seatShape.quadraticCurveTo(-widthX, backY, -widthX + 0.06, backY);
+
+            // Seat Hole
+            const seatHole = new THREE.Path();
+            const holeW = 0.22;
+            const holeBack = 0.12;
+            const holeFront = 0.62;
+            seatHole.moveTo(-holeW + 0.04, holeBack);
+            seatHole.lineTo(holeW - 0.04, holeBack);
+            seatHole.quadraticCurveTo(holeW, holeBack, holeW, holeBack + 0.08);
+            seatHole.bezierCurveTo(holeW + 0.02, 0.38, holeW - 0.03, holeFront, 0, holeFront);
+            seatHole.bezierCurveTo(-holeW + 0.03, holeFront, -holeW - 0.02, 0.38, -holeW, holeBack + 0.08);
+            seatHole.quadraticCurveTo(-holeW, holeBack, -holeW + 0.04, holeBack);
+            seatShape.holes.push(seatHole);
+
+            const extrudeSettings = { depth: 0.022, curveSegments: 32, bevelEnabled: true, bevelSegments: 6, steps: 1, bevelSize: 0.008, bevelThickness: 0.008 };
+            
+            seatGroup = new THREE.Group();
+            hingePivot.add(seatGroup);
+
+            const seatGeo = new THREE.ExtrudeGeometry(seatShape, extrudeSettings);
+            seatGeo.rotateX(Math.PI / 2);
+            const seatMesh = new THREE.Mesh(seatGeo, plasticMat);
+            seatMesh.position.set(0, 0, 0);
+            seatMesh.castShadow = true;
+            seatGroup.add(seatMesh);
+
+            // Trimmed Lid Contour (Solid)
+            const lidShape = new THREE.Shape();
+            lidShape.moveTo(-widthX + 0.06, backY);
+            lidShape.lineTo(widthX - 0.06, backY);
+            lidShape.quadraticCurveTo(widthX + 0.01, backY, widthX + 0.01, backY + 0.10);
+            lidShape.bezierCurveTo(widthX + 0.03, 0.40, widthX - 0.03, frontY + 0.01, 0, frontY + 0.01);
+            lidShape.bezierCurveTo(-widthX + 0.03, frontY + 0.01, -widthX - 0.03, 0.40, -widthX - 0.01, backY + 0.10);
+            lidShape.quadraticCurveTo(-widthX - 0.01, backY, -widthX + 0.06, backY);
+
+            lidGroup = new THREE.Group();
+            hingePivot.add(lidGroup);
+
+            const lidGeo = new THREE.ExtrudeGeometry(lidShape, extrudeSettings);
+            lidGeo.rotateX(Math.PI / 2);
+            const lidMesh = new THREE.Mesh(lidGeo, plasticMat);
+            lidMesh.position.set(0, 0.024, 0);
+            lidMesh.castShadow = true;
+            lidGroup.add(lidMesh);
+
+            lidGroup.rotation.x = state.targetLidAngle;
+            seatGroup.rotation.x = state.targetSeatAngle;
+        }
+
+        let audioCtx = null;
+        let peeGainNode = null;
+        let peeNoiseNode = null;
+
+        function initAudio() {
+            try {
+                if (!audioCtx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) audioCtx = new AudioContext();
+                }
+                if (audioCtx && audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+            } catch (e) {
+                console.warn('AudioContext initialization prevented:', e);
+            }
+        }
+
+        function startPeeSound() {
+            if (!state.soundEnabled) return;
+            initAudio();
+            if (!audioCtx || peeNoiseNode) return;
+
+            try {
+                const bufferSize = audioCtx.sampleRate * 2;
+                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const output = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
+
+                const noiseNode = audioCtx.createBufferSource();
+                noiseNode.buffer = buffer;
+                noiseNode.loop = true;
+
+                const filter = audioCtx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.setValueAtTime(1400, audioCtx.currentTime);
+                filter.Q.setValueAtTime(3.0, audioCtx.currentTime);
+
+                const gainNode = audioCtx.createGain();
+                gainNode.gain.setValueAtTime(0.01, audioCtx.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0.22, audioCtx.currentTime + 0.2);
+
+                noiseNode.connect(filter);
+                filter.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                noiseNode.start();
+
+                peeNoiseNode = noiseNode;
+                peeGainNode = gainNode;
+            } catch (e) {
+                peeNoiseNode = null;
+                peeGainNode = null;
+            }
+        }
+
+        function stopPeeSound() {
+            if (!peeGainNode || !audioCtx) {
+                peeNoiseNode = null;
+                peeGainNode = null;
+                return;
+            }
+
+            try {
+                const nodeToStop = peeNoiseNode;
+                const gainToRamp = peeGainNode;
+                peeNoiseNode = null;
+                peeGainNode = null;
+
+                if (gainToRamp && gainToRamp.gain && typeof gainToRamp.gain.setValueAtTime === 'function') {
+                    const now = audioCtx.currentTime;
+                    gainToRamp.gain.setValueAtTime(gainToRamp.gain.value, now);
+                    gainToRamp.gain.linearRampToValueAtTime(0.001, now + 0.15);
+                }
+
+                setTimeout(() => {
+                    try {
+                        if (nodeToStop) {
+                            nodeToStop.stop();
+                            nodeToStop.disconnect();
+                        }
+                        if (gainToRamp) {
+                            gainToRamp.disconnect();
+                        }
+                    } catch (e) {}
+                }, 160);
+            } catch (e) {
+                peeNoiseNode = null;
+                peeGainNode = null;
+            }
+        }
+
+        function playPlopSound() {
+            if (!state.soundEnabled) return;
+            initAudio();
+            if (!audioCtx) return;
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(260, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.12);
+                gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.14);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.15);
+            } catch (e) {}
+        }
+
+        function playSplatSound() {
+            if (!state.soundEnabled) return;
+            initAudio();
+            if (!audioCtx) return;
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(140, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime + 0.09);
+                gain.gain.setValueAtTime(0.35, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.11);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.11);
+            } catch (e) {}
+        }
+
+        function playFlushSound() {
+            if (!state.soundEnabled) return;
+            initAudio();
+            if (!audioCtx) return;
+            try {
+                const bufferSize = audioCtx.sampleRate * 3;
+                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+
+                const noise = audioCtx.createBufferSource();
+                noise.buffer = buffer;
+                const filter = audioCtx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(300, audioCtx.currentTime);
+                filter.frequency.linearRampToValueAtTime(1600, audioCtx.currentTime + 1.2);
+                filter.frequency.exponentialRampToValueAtTime(200, audioCtx.currentTime + 3.2);
+
+                const gain = audioCtx.createGain();
+                gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.4, audioCtx.currentTime + 0.5);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 3.2);
+
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(audioCtx.destination);
+                noise.start();
+                noise.stop(audioCtx.currentTime + 3.2);
+            } catch (e) {}
+        }
+
+        function triggerWaterWave(impactX, impactZ, strength = 0.04) {
+            if (!waterMesh || !waterMesh.geometry) return;
+            const geo = waterMesh.geometry;
+            const pos = geo.attributes.position;
+            const userData = geo.userData;
+            if (!userData || !userData.waveDisp) return;
+
+            waterMesh.updateWorldMatrix(true, false);
+            const localImpact = waterMesh.worldToLocal(new THREE.Vector3(impactX, getWaterSurfaceY(), impactZ));
+            const localImpactX = localImpact.x;
+            const localImpactZ = localImpact.z;
+
+            for (let i = 0; i < pos.count; i++) {
+                if (userData.origY[i] > 0.005) {
+                    const vx = pos.getX(i);
+                    const vz = pos.getZ(i);
+                    const dist = Math.sqrt((vx - localImpactX) ** 2 + (vz - localImpactZ) ** 2);
+                    
+                    if (dist < 0.35) {
+                        const impulse = Math.cos((dist / 0.35) * Math.PI * 0.5) * strength;
+                        userData.waveVel[i] -= impulse;
+                    }
+                }
+            }
+        }
+
+        function createHealthyStoolGeometry(formType) {
+            if (formType === 0) {
+                // BRISTOL SCALE TYPE 4: Smooth, soft, sausage-like, tapered ends (Healthy human stool)
+                const points = [];
+                const segments = 28;
+                const length = 0.28 + Math.random() * 0.08;
+                const bendX = (Math.random() - 0.5) * 0.12;
+                const bendZ = (Math.random() - 0.5) * 0.10;
+                const sCurve = (Math.random() - 0.5) * 0.06;
+
+                for (let i = 0; i <= segments; i++) {
+                    const t = i / segments;
+                    // Natural organic double curve
+                    const x = Math.sin(t * Math.PI) * bendX + Math.sin(t * Math.PI * 2) * sCurve;
+                    const y = (t - 0.5) * length;
+                    const z = (1 - Math.cos(t * Math.PI)) * bendZ * 0.5;
+                    points.push(new THREE.Vector3(x, y, z));
+                }
+
+                const curve = new THREE.CatmullRomCurve3(points);
+                const tubeGeo = new THREE.TubeGeometry(curve, 32, 0.038, 16, false);
+                
+                // Vertex displacement for tapered ends and organic surface contour
+                const pos = tubeGeo.attributes.position;
+                const vertex = new THREE.Vector3();
+
+                for (let i = 0; i < pos.count; i++) {
+                    vertex.fromBufferAttribute(pos, i);
+                    const t = (vertex.y + length * 0.5) / length;
+
+                    // Taper at ends (0 at tips, 1 in center)
+                    let taper = Math.sin(Math.max(0, Math.min(1, t)) * Math.PI);
+                    taper = Math.pow(taper, 0.45);
+
+                    const angle = Math.atan2(vertex.z, vertex.x);
+                    // Organic segmenting & subtle surface bumps
+                    const subtleSegments = Math.sin(t * Math.PI * 10) * 0.0025 * taper;
+                    const radialNoise = (Math.sin(angle * 4 + t * 12) * Math.cos(angle * 3 - t * 8)) * 0.003 * taper;
+                    const netDisplacement = subtleSegments + radialNoise;
+
+                    const radialDir = new THREE.Vector3(vertex.x, 0, vertex.z).normalize();
+                    if (radialDir.lengthSq() > 0) {
+                        vertex.x = radialDir.x * (0.038 * taper + netDisplacement);
+                        vertex.z = radialDir.z * (0.038 * taper + netDisplacement);
+                    }
+
+                    pos.setXYZ(i, vertex.x, vertex.y, vertex.z);
+                }
+
+                tubeGeo.computeVertexNormals();
+                return tubeGeo;
+
+            } else if (formType === 1) {
+                // BRISTOL SCALE TYPE 3: Sausage-like with cracks on surface
+                const points = [];
+                const segments = 24;
+                const length = 0.26 + Math.random() * 0.06;
+                const bendX = (Math.random() - 0.5) * 0.08;
+
+                for (let i = 0; i <= segments; i++) {
+                    const t = i / segments;
+                    const x = Math.sin(t * Math.PI) * bendX;
+                    const y = (t - 0.5) * length;
+                    const z = (Math.random() - 0.5) * 0.01;
+                    points.push(new THREE.Vector3(x, y, z));
+                }
+
+                const curve = new THREE.CatmullRomCurve3(points);
+                const tubeGeo = new THREE.TubeGeometry(curve, 30, 0.04, 16, false);
+                
+                const pos = tubeGeo.attributes.position;
+                const vertex = new THREE.Vector3();
+
+                for (let i = 0; i < pos.count; i++) {
+                    vertex.fromBufferAttribute(pos, i);
+                    const t = (vertex.y + length * 0.5) / length;
+
+                    let taper = Math.sin(Math.max(0, Math.min(1, t)) * Math.PI);
+                    taper = Math.pow(taper, 0.4);
+
+                    const angle = Math.atan2(vertex.z, vertex.x);
+                    // Deeper cracks and surface grooves
+                    const cracks = Math.sign(Math.sin(angle * 6 + t * 16)) * 0.004 * taper;
+                    const ribs = Math.sin(t * Math.PI * 14) * 0.004 * taper;
+
+                    const radialDir = new THREE.Vector3(vertex.x, 0, vertex.z).normalize();
+                    if (radialDir.lengthSq() > 0) {
+                        vertex.x = radialDir.x * (0.04 * taper + cracks + ribs);
+                        vertex.z = radialDir.z * (0.04 * taper + cracks + ribs);
+                    }
+
+                    pos.setXYZ(i, vertex.x, vertex.y, vertex.z);
+                }
+
+                tubeGeo.computeVertexNormals();
+                return tubeGeo;
+
+            } else {
+                // BRISTOL SCALE TYPE 5/6: Soft lumps/mushy stool
+                const groupGeo = new THREE.SphereGeometry(0.04, 16, 16);
+                groupGeo.scale(1.4, 0.6, 1.2);
+                return groupGeo;
+            }
+        }
+
+        function spawnPoop() {
+            initAudio();
+            playSplatSound();
+
+            // Rich organic brown stool color palette
+            const darkBrowns = [0x3d2314, 0x4a2b17, 0x331c0e, 0x54321a, 0x2e180b];
+            const poopColor = darkBrowns[Math.floor(Math.random() * darkBrowns.length)];
+
+            // Realistic wet, glossy MeshPhysicalMaterial for stool
+            const poopMat = new THREE.MeshPhysicalMaterial({
+                color: poopColor,
+                roughness: 0.35,
+                metalness: 0.05,
+                clearcoat: 0.85, // Wet gloss sheen
+                clearcoatRoughness: 0.15,
+                bumpMap: proceduralTextures.stoolBump,
+                bumpScale: 0.008,
+                reflectivity: 0.6
+            });
+
+            const poopGroup = new THREE.Group();
+            
+            // Randomly select Bristol Scale stool form
+            // 0: Type 4 (Smooth sausage), 1: Type 3 (Cracked sausage), 2: Type 5 (Soft lumps)
+            const formType = Math.random() < 0.55 ? 0 : (Math.random() < 0.75 ? 1 : 2);
+
+            if (formType === 0) {
+                state.lastSpawnType = 'Тип 4 (Норма)';
+                const geo = createHealthyStoolGeometry(0);
+                const mesh = new THREE.Mesh(geo, poopMat);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                poopGroup.add(mesh);
+
+            } else if (formType === 1) {
+                state.lastSpawnType = 'Тип 3 (Плотный)';
+                const geo = createHealthyStoolGeometry(1);
+                const mesh = new THREE.Mesh(geo, poopMat);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                poopGroup.add(mesh);
+
+            } else {
+                state.lastSpawnType = 'Тип 5 (Мягкий)';
+                const lumpCount = 4 + Math.floor(Math.random() * 3);
+                for (let i = 0; i < lumpCount; i++) {
+                    const lumpGeo = createHealthyStoolGeometry(2);
+                    const lumpMesh = new THREE.Mesh(lumpGeo, poopMat);
+                    lumpMesh.position.set(
+                        (Math.random() - 0.5) * 0.07,
+                        (i * 0.025) - 0.04,
+                        (Math.random() - 0.5) * 0.07
+                    );
+                    lumpMesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
+                    lumpMesh.castShadow = true;
+                    poopGroup.add(lumpMesh);
+                }
+            }
+
+            poopGroup.position.set(
+                (Math.random() - 0.5) * 0.08,
+                1.55,
+                BOWL_CENTER_Z + 0.3 + (Math.random() - 0.5) * 0.08
+            );
+
+            // Random orientation for realistic fall angle
+            poopGroup.rotation.set(
+                Math.PI / 2 + (Math.random() - 0.5) * 0.4,
+                (Math.random() - 0.5) * 0.5,
+                (Math.random() - 0.5) * 0.5
+            );
+
+            poopGroup.userData = {
+                vx: (Math.random() - 0.5) * 0.03,
+                vy: -0.8 - Math.random() * 0.3,
+                vz: -0.28 - Math.random() * 0.1,
+                rotVx: (Math.random() - 0.5) * 2,
+                rotVz: (Math.random() - 0.5) * 2,
+                isFloating: false,
+                isOnFloor: false,
+                color: poopColor,
+                formType: formType
+            };
+
+            scene.add(poopGroup);
+            state.poopObjects.push(poopGroup);
+            statBristol.innerText = state.lastSpawnType;
+        }
+
+        function createWaterRipple(x, z, maxRadius = 0.25, duration = 0.6) {
+            if (ripples.length >= 100) return;
+            const ringGeo = new THREE.RingGeometry(0.022, 0.025, 64);
+            const ringMat = new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.85,
+                depthWrite: false
+            });
+            // Clip decorative rings to the actual elliptical water footprint.
+            ringMat.onBeforeCompile = shader => {
+                shader.uniforms.waterRadius = { value: rippleRadiusUniform };
+                shader.vertexShader = 'varying vec3 rippleWorld;\n' + shader.vertexShader;
+                shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nrippleWorld = (modelMatrix * vec4(position, 1.0)).xyz;');
+                shader.fragmentShader = 'varying vec3 rippleWorld;\nuniform vec2 waterRadius;\n' + shader.fragmentShader;
+                shader.fragmentShader = shader.fragmentShader.replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\nif (length(vec2(rippleWorld.x, (rippleWorld.z + 0.25)) / waterRadius) > 1.0) discard;');
+            };
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = -Math.PI / 2;
+            ring.position.set(x, getWaterSurfaceY() + 0.002, z);
+            scene.add(ring);
+
+            ripples.push({
+                mesh: ring,
+                maxRadius: maxRadius,
+                life: 0,
+                maxLife: duration
+            });
+        }
+
+        function createWaterSplash(pos, count = 6, speed = 0.35) {
+            if (splashParticles.length >= 350) return;
+            const splashGeo = fxDropGeometry;
+            const splashMat = new THREE.MeshPhysicalMaterial({
+                color: waterMaterial ? waterMaterial.color : 0x7dd3fc,
+                transparent: true,
+                opacity: 0.82,
+                depthWrite: false,
+                roughness: 0.06,
+                clearcoat: 1.0,
+                clearcoatRoughness: 0.03
+            });
+
+            count = Math.min(count * 2, 350 - splashParticles.length);
+            const batch = { material: splashMat, remaining: count };
+            for (let i = 0; i < count; i++) {
+                const drop = new THREE.Mesh(splashGeo, splashMat);
+                drop.scale.setScalar(0.4 + Math.random() * 0.65);
+                drop.position.set(pos.x, pos.y, pos.z);
+                const angle = Math.random() * Math.PI * 2;
+                const upVel = 0.25 + Math.random() * speed;
+                const radialVel = 0.05 + Math.random() * speed * 0.6;
+
+                drop.userData = {
+                    vx: Math.cos(angle) * radialVel,
+                    vy: upVel,
+                    vz: Math.sin(angle) * radialVel,
+                    life: 0,
+                    batch: batch,
+                    size: drop.scale.x
+                };
+                scene.add(drop);
+                splashParticles.push(drop);
+            }
+        }
+
+        function updateWaterEffects(dt) {
+            if (waterMesh && waterMesh.geometry) {
+                const geo = waterMesh.geometry;
+                const pos = geo.attributes.position;
+                const userData = geo.userData;
+
+                if (userData && userData.waveDisp) {
+                    const springK = 35.0; 
+                    const damping = Math.pow(0.92, dt * 60); 
+
+                    for (let i = 0; i < pos.count; i++) {
+                        if (userData.origY[i] > 0.005) {
+                            const force = -springK * userData.waveDisp[i];
+                            userData.waveVel[i] += force * dt;
+                            userData.waveVel[i] *= damping;
+                            userData.waveDisp[i] += userData.waveVel[i] * dt;
+
+                            pos.setY(i, userData.origY[i] + userData.waveDisp[i]);
+                        }
+                    }
+                    pos.needsUpdate = true;
+                    geo.computeVertexNormals();
+                }
+            }
+
+            for (let i = ripples.length - 1; i >= 0; i--) {
+                const r = ripples[i];
+                r.life += dt;
+                const progress = r.life / r.maxLife;
+                if (progress >= 1.0) {
+                    scene.remove(r.mesh);
+                    if (r.mesh.geometry) r.mesh.geometry.dispose();
+                    if (r.mesh.material) r.mesh.material.dispose();
+                    ripples.splice(i, 1);
+                } else {
+                    const scale = 1 + progress * (r.maxRadius / 0.025);
+                    r.mesh.scale.set(scale, scale, 1);
+                    r.mesh.material.opacity = 0.85 * (1 - progress);
+                    r.mesh.position.y = getWaterSurfaceY() + 0.002;
+                }
+            }
+
+            for (let i = splashParticles.length - 1; i >= 0; i--) {
+                const drop = splashParticles[i];
+                drop.userData.life += dt;
+                drop.position.x += drop.userData.vx * dt;
+                drop.position.y += drop.userData.vy * dt;
+                drop.position.z += drop.userData.vz * dt;
+                drop.userData.vy -= 9.8 * dt * 0.45;
+
+                orientFluidDrop(drop, drop.userData.size);
+                const landedInWater = insideWater(drop.position.x, drop.position.z) && drop.position.y <= getWaterSurfaceY();
+                if (landedInWater || drop.position.y <= 0.008 || drop.userData.life > 1.8) {
+                    if (landedInWater && drop.userData.life > 0.07 && Math.random() < 0.18)
+                        createWaterRipple(drop.position.x, drop.position.z, 0.06, 0.3);
+                    if (drop.position.y <= 0.008) createFloorSplatter(drop.position, drop.material.color.getHex(), 0.012);
+                    scene.remove(drop);
+                    if (--drop.userData.batch.remaining === 0) drop.userData.batch.material.dispose();
+                    splashParticles.splice(i, 1);
+                }
+            }
+        }
+
+        const peeGeo = new THREE.SphereGeometry(0.011, 20, 12);
+        const peeMat = new THREE.MeshPhysicalMaterial({
+            color: 0xfacc15,
+            transparent: true,
+            opacity: 0.92,
+            roughness: 0.05,
+            clearcoat: 1.0,
+            clearcoatRoughness: 0.05,
+            transmission: 0.3,
+            ior: 1.333,
+            depthWrite: false
+        });
+        const puddleGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.002, 12);
+
+        let peeEmissionCarry = 0;
+        function emitPeeParticles(dt = 1 / 60) {
+            if (!state.isPeeing) { peeEmissionCarry = 0; return; }
+            peeEmissionCarry += 240 * dt;
+            const count = Math.floor(peeEmissionCarry);
+            peeEmissionCarry -= count;
+            for (let i = 0; i < count; i++) {
+                const particle = new THREE.Mesh(peeGeo, peeMat);
+                particle.position.set((Math.random() - 0.5) * 0.02, 1.45, 0.20 + (Math.random() - 0.5) * 0.02);
+                particle.userData = {
+                    vx: (Math.random() - 0.5) * 0.08,
+                    vy: -1.0 - Math.random() * 0.4,
+                    vz: -0.6 - Math.random() * 0.2,
+                    life: 0,
+                    bounced: false
+                };
+                // Distribute births through the timestep rather than four coincident balls.
+                const age = count ? dt * i / count : 0;
+                particle.position.x += particle.userData.vx * age;
+                particle.position.y += particle.userData.vy * age - 1.225 * age * age;
+                particle.position.z += particle.userData.vz * age;
+                particle.userData.vy -= 2.45 * age;
+                scene.add(particle);
+                state.peeParticles.push(particle);
+            }
+        }
+
+        function updatePeeParticles(dt) {
+            const isLidClosed = (state.coverMode === 2 || Math.abs(state.currentLidAngle) < 0.25);
+            const lidSurfaceY = 0.845;
+            const surfaceY = getWaterSurfaceY();
+
+            for (let i = state.peeParticles.length - 1; i >= 0; i--) {
+                const p = state.peeParticles[i];
+                if (!p || !p.position || !p.userData) {
+                    if (p && p.parent) p.parent.remove(p);
+                    state.peeParticles.splice(i, 1);
+                    continue;
+                }
+                p.userData.life += dt;
+
+                p.position.x += p.userData.vx * dt;
+                p.position.y += p.userData.vy * dt;
+                p.position.z += p.userData.vz * dt;
+                p.userData.vy -= 9.8 * dt * 0.25;
+                orientFluidDrop(p, p.userData.bounced ? 0.55 : 0.85);
+
+                if (isLidClosed && p.position.y <= lidSurfaceY && !p.userData.bounced) {
+                    if (p.position.x > -0.36 && p.position.x < 0.36 && p.position.z > -0.65 && p.position.z < 0.22) {
+                        if (Math.random() > 0.4) {
+                            const puddle = new THREE.Mesh(puddleGeo, peeMat);
+                            const localPos = lidGroup.worldToLocal(p.position.clone());
+                            puddle.position.copy(localPos);
+                            puddle.position.y = 0.052;
+                            lidGroup.add(puddle);
+                            state.splatters.push({ mesh: puddle, type: 'pee', life: 0 });
+                        }
+
+                        for (let b = 0; b < 2; b++) {
+                            const bounceP = new THREE.Mesh(peeGeo, peeMat);
+                            bounceP.scale.setScalar(0.6);
+                            bounceP.position.copy(p.position);
+                            bounceP.userData = {
+                                vx: (Math.random() - 0.5) * 0.5,
+                                vy: 0.3 + Math.random() * 0.3,
+                                vz: (Math.random() - 0.5) * 0.5,
+                                life: 0,
+                                bounced: true
+                            };
+                            scene.add(bounceP);
+                            state.peeParticles.push(bounceP);
+                        }
+
+                        if (p.parent) p.parent.remove(p);
+                        state.peeParticles.splice(i, 1);
+                        continue;
+                    }
+                }
+
+                if (!isLidClosed && p.position.y <= surfaceY && insideWater(p.position.x, p.position.z)) {
+                    state.peeVol += 0.0035;
+                    state.waterLevel = Math.min(state.maxWaterLevel, state.waterLevel + 0.0003);
+                    
+                    if (Math.random() < 0.25) {
+                        triggerWaterWave(p.position.x, p.position.z, 0.012);
+                        createWaterRipple(p.position.x, p.position.z, 0.12, 0.35);
+                        createWaterSplash(new THREE.Vector3(p.position.x, surfaceY, p.position.z), 1, 0.15);
+                    }
+
+                    if (p.parent) p.parent.remove(p);
+                    state.peeParticles.splice(i, 1);
+                } else if (p.position.y < 0 || p.userData.life > 2.5) {
+                    if (p.position.y < 0) {
+                        state.floorPuddleVol += 0.0002;
+                        if (Math.random() < 0.2) createFloorSplatter(p.position, 0xeab308, 0.018);
+                    }
+                    if (p.parent) p.parent.remove(p);
+                    state.peeParticles.splice(i, 1);
+                }
+            }
+        }
+
+        function updatePoopPhysics(dt) {
+            const isLidClosed = (state.coverMode === 2 || Math.abs(state.currentLidAngle) < 0.25);
+            const lidSurfaceY = 0.845;
+            const surfaceY = getWaterSurfaceY();
+
+            for (let i = state.poopObjects.length - 1; i >= 0; i--) {
+                const poop = state.poopObjects[i];
+                if (!poop) continue;
+
+                if (!poop.userData.isFloating && !poop.userData.isOnFloor && !state.isFlushing) {
+                    poop.position.x += poop.userData.vx * dt;
+                    poop.position.y += poop.userData.vy * dt;
+                    poop.position.z += poop.userData.vz * dt;
+                    poop.userData.vy -= 9.8 * dt * 0.5; 
+                    poop.rotation.x += poop.userData.rotVx * dt;
+                    poop.rotation.z += poop.userData.rotVz * dt;
+
+                    // CLOSED LID COLLISION (SMEARING ON LID)
+                    if (isLidClosed && poop.position.y <= lidSurfaceY) {
+                        if (poop.position.x > -0.36 && poop.position.x < 0.36 && poop.position.z > -0.65 && poop.position.z < 0.22) {
+                            playSplatSound();
+                            
+                            createStoolFragments(poop.position.clone(), poop.userData.color, 8);
+                            const localPos = lidGroup.worldToLocal(poop.position.clone());
+                            poop.position.copy(localPos);
+                            poop.position.y = 0.052;
+
+                            poop.rotation.set(0, 0, 0);
+                            poop.scale.set(1.4, 0.2, 1.4);
+                            
+                            scene.remove(poop);
+                            lidGroup.add(poop);
+                            
+                            state.splatters.push({ mesh: poop, type: 'poop', life: 0 });
+                            state.poopObjects.splice(i, 1);
+                            continue;
+                        }
+                    }
+
+                    // WATER SURFACE SPLASH & LIQUID WAVES
+                    if (!isLidClosed && poop.position.y <= surfaceY && insideWater(poop.position.x, poop.position.z)) {
+                        poop.position.y = surfaceY;
+                        poop.userData.isFloating = true;
+                        playPlopSound();
+                        
+                        state.poopVol += 0.22;
+                        state.waterLevel = Math.min(state.maxWaterLevel, state.waterLevel + 0.018);
+
+                        triggerWaterWave(poop.position.x, poop.position.z, 0.05);
+                        createWaterRipple(poop.position.x, poop.position.z, 0.38, 0.85);
+                        const impact = new THREE.Vector3(poop.position.x, surfaceY, poop.position.z);
+                        createWaterSplash(impact, 18, Math.min(1.3, Math.abs(poop.userData.vy) * 0.3));
+                        createImpactCrown(impact);
+                        createStoolFragments(impact, poop.userData.color, poop.userData.formType === 2 ? 12 : 5);
+                    } 
+                    // FALLING OFF TO FLOOR
+                    else if (poop.position.y <= 0.015) {
+                        poop.userData.isOnFloor = true;
+                        poop.position.y = 0.015;
+                        poop.userData.vx = 0;
+                        poop.userData.vy = 0;
+                        poop.userData.vz = 0;
+                        poop.scale.set(1.4, 0.2, 1.4);
+                        playSplatSound();
+                        createFloorSplatter(poop.position, poop.userData.color || 0x211005, 0.12 + Math.random() * 0.1);
+                    }
+                } else if (poop.userData.isFloating && !state.isFlushing) {
+                    if (isLidClosed && poop.position.y >= lidSurfaceY - 0.05) {
+                        playSplatSound();
+                        const localPos = lidGroup.worldToLocal(poop.position.clone());
+                        poop.position.copy(localPos);
+                        poop.position.y = 0.052;
+                        poop.rotation.set(0, 0, 0);
+                        poop.userData.isFloating = false;
+                        poop.scale.set(1.5, 0.2, 1.5);
+                        scene.remove(poop);
+                        lidGroup.add(poop);
+                        state.splatters.push({ mesh: poop, type: 'poop', life: 0 });
+                        state.poopObjects.splice(i, 1);
+                        continue;
+                    }
+
+                    poop.position.y = surfaceY + Math.sin(Date.now() * 0.004 + (i * 0.5)) * 0.004;
+
+                    // OVERFLOW SPILL OVER RIM ONTO FLOOR
+                    if (state.waterLevel >= RIM_HEIGHT && Math.random() < 0.03) {
+                        poop.userData.isFloating = false;
+                        poop.userData.isOnFloor = true;
+                        
+                        const angle = Math.random() * Math.PI * 2;
+                        const dist = 0.45 + Math.random() * 0.4;
+                        poop.position.set(
+                            Math.cos(angle) * dist,
+                            0.015,
+                            BOWL_CENTER_Z + Math.sin(angle) * dist
+                        );
+                        poop.scale.set(1.4, 0.2, 1.4);
+                        playSplatSound();
+
+                        createFloorSplatter(poop.position, poop.userData.color || 0x4a2810, 0.12 + Math.random() * 0.1);
+                    }
+                }
+            }
+        }
+
+        function createFloorSplatter(pos, colorHex, radius) {
+            if (state.floorSplatters.length >= 240) {
+                const old = state.floorSplatters.shift();
+                old.parent.remove(old); old.geometry.dispose(); old.material.dispose();
+            }
+            const splatGeo = new THREE.CircleGeometry(radius, 48);
+            const edge = splatGeo.attributes.position;
+            for (let i = 1; i < edge.count; i++) {
+                const a = Math.atan2(edge.getY(i), edge.getX(i));
+                const wobble = 1 + 0.12 * Math.sin(a * 5) + 0.07 * Math.cos(a * 9);
+                edge.setXY(i, edge.getX(i) * wobble, edge.getY(i) * wobble);
+            }
+            const splatMat = new THREE.MeshBasicMaterial({
+                color: colorHex,
+                transparent: true,
+                opacity: 0.88,
+                depthWrite: false
+            });
+            const splat = new THREE.Mesh(splatGeo, splatMat);
+            splat.rotation.x = -Math.PI / 2;
+            splat.position.set(pos.x, 0.006, pos.z);
+            splat.scale.set(1 + Math.random() * 0.4, 1 + Math.random() * 0.4, 1);
+            floorSplatGroup.add(splat);
+            state.floorSplatters.push(splat);
+        }
+
+        function updateSplatters(dt) {
+            const tilt = Math.sin(-state.currentLidAngle);
+
+            for (let i = state.splatters.length - 1; i >= 0; i--) {
+                const s = state.splatters[i];
+                if (!s || !s.mesh) continue;
+                s.life += dt;
+
+                if (tilt > 0.08) {
+                    const slideSpeed = (s.type === 'pee' ? 0.38 : 0.20) * tilt;
+                    s.mesh.position.z -= slideSpeed * dt;
+
+                    if (s.type === 'pee') {
+                        s.mesh.scale.z = Math.min(5.0, s.mesh.scale.z + dt * 2.5);
+                    } else if (s.type === 'poop') {
+                        s.mesh.scale.z = Math.min(2.5, s.mesh.scale.z + dt * 1.2);
+                    }
+
+                    if (s.mesh.position.z <= 0.02) {
+                        const worldPos = lidGroup.localToWorld(s.mesh.position.clone());
+                        lidGroup.remove(s.mesh);
+
+                        if (s.type === 'poop') {
+                            scene.add(s.mesh);
+                            s.mesh.position.copy(worldPos);
+                            s.mesh.rotation.set(0, 0, 0);
+                            s.mesh.userData = {
+                                vx: (Math.random() - 0.5) * 0.04,
+                                vy: -0.4,
+                                vz: (Math.random() - 0.5) * 0.04,
+                                rotVx: (Math.random() - 0.5) * 2,
+                                rotVz: (Math.random() - 0.5) * 2,
+                                isFloating: false,
+                                isOnFloor: false,
+                                color: s.mesh.userData.color || 0x4a2810
+                            };
+                            state.poopObjects.push(s.mesh);
+                            playSplatSound();
+                        } else if (s.type === 'pee') {
+                            // Actual falling drops replace instant teleportation into the bowl.
+                            for (let d = 0; d < 5; d++) {
+                                const drop = new THREE.Mesh(peeGeo, peeMat);
+                                drop.position.copy(worldPos);
+                                drop.position.x += (Math.random() - 0.5) * 0.012;
+                                drop.userData = { vx: 0, vy: -0.2 - d * 0.07, vz: 0.12, life: 0, bounced: true };
+                                scene.add(drop); state.peeParticles.push(drop);
+                            }
+                        }
+
+                        state.splatters.splice(i, 1);
+                        continue;
+                    }
+                } else {
+                    if (s.type === 'pee') {
+                        s.mesh.scale.x = Math.min(s.mesh.scale.x + dt * 0.8, 3.5);
+                        s.mesh.scale.z = Math.min(s.mesh.scale.z + dt * 0.8, 3.5);
+                        s.mesh.position.z = Math.min(s.mesh.position.z + dt * 0.04, 0.70); 
+                    } else if (s.type === 'poop') {
+                        s.mesh.position.z = Math.min(s.mesh.position.z + dt * 0.015, 0.65);
+                    }
+                }
+            }
+        }
+
+        function updateOverflowMechanics(dt) {
+            if (state.waterLevel >= RIM_HEIGHT) {
+                const overflowAmount = (state.waterLevel - RIM_HEIGHT);
+                const overflowRate = (overflowAmount + 0.05) * dt * 2.0;
+                state.floorPuddleVol += overflowRate;
+                state.waterLevel = Math.max(RIM_HEIGHT - 0.001, state.waterLevel - overflowRate * 0.15);
+
+                if (Math.random() < 1 - Math.exp(-18 * dt)) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const radius = 0.42;
+                    const pos = new THREE.Vector3(
+                        Math.cos(angle) * (radius + Math.random() * 0.15),
+                        0.01,
+                        BOWL_CENTER_Z + Math.sin(angle) * (radius + Math.random() * 0.15)
+                    );
+                    
+                    const totalVol = Math.max(0.001, state.waterVol + state.peeVol + state.poopVol);
+                    const pRatio = state.peeVol / totalVol;
+                    const fRatio = state.poopVol / totalVol;
+                    
+                    let splatColor = 0x38bdf8;
+                    if (fRatio > 0.12) splatColor = 0x5c3317;
+                    else if (pRatio > 0.08) splatColor = 0xeab308;
+
+                    createFloorSplatter(pos, splatColor, 0.06 + Math.random() * 0.09);
+                }
+            }
+
+            if (state.floorPuddleVol > 0) {
+                const puddleRadius = Math.min(3.2, Math.sqrt(state.floorPuddleVol) * 1.4);
+                floorPuddleMesh.scale.set(puddleRadius, puddleRadius, 1.0);
+                floorPuddleMaterial.opacity = Math.min(0.92, 0.25 + state.floorPuddleVol * 1.4);
+            }
+        }
+
+        function triggerFlush() {
+            if (state.isFlushing) return;
+            initAudio();
+            state.isFlushing = true;
+            state.flushPhase = 1; 
+            state.flushTimer = 0;
+            playFlushSound();
+        }
+
+        function updateFlushSequence(dt) {
+            if (!state.isFlushing) return;
+            state.flushTimer += dt;
+
+            if (state.flushPhase === 1) {
+                waterMesh.rotation.y += dt * 8.0;
+                state.waterLevel = Math.max(0.32, state.waterLevel - dt * 0.18);
+                
+                state.poopObjects.forEach((poop) => {
+                    if (poop && poop.userData && poop.userData.isFloating) {
+                        const dx = 0 - poop.position.x;
+                        const dz = BOWL_CENTER_Z - poop.position.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        const angle = Math.atan2(-dz, -dx) + dt * 6.0;
+                        const newDist = Math.max(0.01, dist - dt * 0.18);
+
+                        poop.position.x = Math.cos(angle) * newDist;
+                        poop.position.z = BOWL_CENTER_Z + Math.sin(angle) * newDist;
+                        poop.position.y = state.waterLevel;
+                        poop.scale.multiplyScalar(Math.pow(0.94, dt * 60)); 
+                    }
+                });
+
+                for (let i = state.poopObjects.length - 1; i >= 0; i--) {
+                    const poop = state.poopObjects[i];
+                    if (poop && poop.userData && poop.userData.isFloating && poop.scale.x < 0.1) {
+                        scene.remove(poop);
+                        const materials = new Set();
+                        poop.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) materials.add(o.material); });
+                        materials.forEach(m => m.dispose());
+                        state.poopObjects.splice(i, 1);
+                    }
+                }
+
+                if (state.flushTimer > 2.2) state.flushPhase = 2;
+            } else if (state.flushPhase === 2) {
+                waterMesh.rotation.y += dt * 2.0;
+                state.waterLevel = Math.min(state.baseWaterLevel, state.waterLevel + dt * 0.12);
+                
+                state.peeVol = Math.max(0.0, state.peeVol - dt * 0.6);
+                state.poopVol = Math.max(0.0, state.poopVol - dt * 0.6);
+
+                if (state.flushTimer > 4.0 && Math.abs(state.waterLevel - state.baseWaterLevel) < 0.01) {
+                    state.isFlushing = false;
+                    state.waterLevel = state.baseWaterLevel;
+                    state.peeVol = 0.0;
+                    state.poopVol = 0.0;
+                    waterMesh.rotation.y = 0;
+                }
+            }
+        }
+
+        function updateVisuals() {
+            const visualWaterY = Math.min(RIM_HEIGHT + 0.012, state.waterLevel);
+            waterMesh.position.y = visualWaterY;
+
+            const heightFactor = Math.max(0, Math.min(1.0, (visualWaterY - 0.28) / (RIM_HEIGHT - 0.28)));
+            const radiusScale = 0.5 + heightFactor * 0.52;
+            waterMesh.scale.set(radiusScale, 1.0, radiusScale * 1.15);
+            rippleRadiusUniform.set(0.33 * radiusScale, 0.33 * radiusScale * 1.15);
+
+            const totalVol = Math.max(0.001, state.waterVol + state.peeVol + state.poopVol);
+            const pRatio = state.peeVol / totalVol;
+            const fRatio = state.poopVol / totalVol;
+
+            const peeColorFactor = Math.min(1.0, Math.pow(pRatio * 4.0, 0.65));
+            const fecesColorFactor = Math.min(1.0, Math.pow(fRatio * 2.5, 0.8));
+
+            const cleanColor = new THREE.Color(0x38bdf8); 
+            const urineColor = new THREE.Color(0xeab308); 
+            const fecesColor = new THREE.Color(0x4a2810); 
+
+            let blendedColor = cleanColor.clone().lerp(urineColor, peeColorFactor);
+            if (fecesColorFactor > 0) {
+                blendedColor.lerp(fecesColor, fecesColorFactor);
+            }
+
+            waterMaterial.color.copy(blendedColor);
+            floorPuddleMaterial.color.copy(blendedColor);
+            waterMaterial.opacity = 0.78 + fecesColorFactor * 0.2; 
+
+            const fillPercent = Math.round((state.waterLevel / RIM_HEIGHT) * 100);
+            barWater.style.width = `${Math.min(100, fillPercent)}%`;
+            
+            if (fillPercent > 100) {
+                statWater.innerText = `${fillPercent}% (Перелив!)`;
+            } else {
+                statWater.innerText = `${fillPercent}%`;
+            }
+
+            const lidText = document.getElementById('lid-text');
+            const lidIcon = document.getElementById('lid-icon');
+            if (lidText && lidIcon) {
+                if (state.coverMode === 0) {
+                    lidText.innerText = 'Крышка: Открыто всё';
+                    lidIcon.innerText = '🚽';
+                    btnLid.className = 'btn-action bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 font-bold py-3 px-2 rounded-2xl flex flex-col items-center gap-1 flex-1 select-none';
+                } else if (state.coverMode === 1) {
+                    lidText.innerText = 'Крышка: Сиденье';
+                    lidIcon.innerText = '⭕';
+                    btnLid.className = 'btn-action bg-sky-900/60 hover:bg-sky-800/80 text-sky-200 border border-sky-500 font-bold py-3 px-2 rounded-2xl flex flex-col items-center gap-1 flex-1 select-none';
+                } else {
+                    lidText.innerText = 'Крышка: Всё закрыто';
+                    lidIcon.innerText = '🔒';
+                    btnLid.className = 'btn-action bg-amber-900/60 hover:bg-amber-800/80 text-amber-200 border border-amber-500 font-bold py-3 px-2 rounded-2xl flex flex-col items-center gap-1 flex-1 select-none';
+                }
+            }
+
+            if (fillPercent >= 100) {
+                barWater.className = 'bg-rose-500 h-full transition-all duration-200 animate-pulse';
+                statOverflow.innerText = `⚠️ ПЕРЕЛИВ (${fillPercent - 100}% выше нормы)`;
+                statOverflow.className = 'font-bold text-rose-500 animate-pulse';
+            } else if (state.floorPuddleVol > 0) {
+                barWater.className = 'bg-amber-500 h-full transition-all duration-200';
+                statOverflow.innerText = 'Лужа на полу';
+                statOverflow.className = 'font-bold text-amber-400';
+            } else {
+                barWater.className = 'bg-cyan-500 h-full transition-all duration-200';
+                statOverflow.innerText = 'Сухо';
+                statOverflow.className = 'font-bold text-emerald-400';
+            }
+
+            if (fecesColorFactor > 0.3) {
+                statMix.innerText = 'Густая масса';
+                statMix.className = 'font-bold text-amber-700';
+            } else if (fecesColorFactor > 0.05 || peeColorFactor > 0.4) {
+                statMix.innerText = 'Ярко-желтая вода';
+                statMix.className = 'font-bold text-yellow-400';
+            } else if (peeColorFactor > 0.05) {
+                statMix.innerText = 'Подкрашенная вода';
+                statMix.className = 'font-bold text-yellow-300';
+            } else {
+                statMix.innerText = 'Чистая вода';
+                statMix.className = 'font-bold text-sky-400';
+            }
+        }
+
+        function setupUIListeners() {
+            const startPee = (e) => {
+                if (e) e.preventDefault();
+                if (state.isPeeing) return;
+                initAudio();
+                state.isPeeing = true;
+                btnPee.classList.add('glow-active');
+                startPeeSound();
+            };
+            const stopPee = (e) => {
+                if (e) e.preventDefault();
+                if (!state.isPeeing) return;
+                state.isPeeing = false;
+                btnPee.classList.remove('glow-active');
+                stopPeeSound();
+            };
+
+            btnPee.addEventListener('pointerdown', startPee);
+            btnPee.addEventListener('pointerup', stopPee);
+            btnPee.addEventListener('pointerleave', stopPee);
+            btnPee.addEventListener('pointercancel', stopPee);
+            window.addEventListener('blur', () => stopPee());
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) stopPee();
+                lastTime = performance.now();
+            });
+
+            btnPoop.addEventListener('click', (e) => {
+                e.preventDefault();
+                spawnPoop();
+            });
+
+            btnFlush.addEventListener('click', (e) => {
+                e.preventDefault();
+                triggerFlush();
+            });
+
+            const toggleLid = () => {
+                initAudio();
+                state.coverMode = (state.coverMode + 1) % 3;
+                if (state.coverMode === 0) {
+                    state.targetSeatAngle = -1.85;
+                    state.targetLidAngle = -1.85;
+                } else if (state.coverMode === 1) {
+                    state.targetSeatAngle = 0.0;
+                    state.targetLidAngle = -1.85;
+                } else if (state.coverMode === 2) {
+                    state.targetSeatAngle = 0.0;
+                    state.targetLidAngle = 0.0;
+                }
+            };
+
+            btnLid.addEventListener('click', (e) => {
+                e.preventDefault();
+                toggleLid();
+            });
+
+            // Keyboard Shortcuts
+            window.addEventListener('keydown', (e) => {
+                if (e.repeat) return;
+                const key = e.key.toLowerCase();
+                if (key === '1' || key === 'q' || key === 'й') {
+                    startPee();
+                } else if (key === '2' || key === 'w' || key === 'ц') {
+                    spawnPoop();
+                    btnPoop.classList.add('scale-95');
+                    setTimeout(() => btnPoop.classList.remove('scale-95'), 120);
+                } else if (key === 'enter') {
+                    e.preventDefault();
+                    triggerFlush();
+                    btnFlush.classList.add('scale-95');
+                    setTimeout(() => btnFlush.classList.remove('scale-95'), 120);
+                } else if (key === ' ' || key === 'spacebar') {
+                    e.preventDefault();
+                    toggleLid();
+                    btnLid.classList.add('scale-95');
+                    setTimeout(() => btnLid.classList.remove('scale-95'), 120);
+                }
+            });
+
+            window.addEventListener('keyup', (e) => {
+                const key = e.key.toLowerCase();
+                if (key === '1' || key === 'q' || key === 'й') {
+                    stopPee();
+                }
+            });
+
+            btnSound.addEventListener('click', () => {
+                state.soundEnabled = !state.soundEnabled;
+                soundIcon.innerText = state.soundEnabled ? '🔊' : '🔇';
+                soundLabel.innerText = state.soundEnabled ? 'Звук Вкл' : 'Звук Выкл';
+                if (!state.soundEnabled) stopPeeSound();
+            });
+
+            const setCameraView = (pos, target) => {
+                controls.target.copy(target);
+                camera.position.copy(pos);
+            };
+
+            document.getElementById('cam-preset-1').addEventListener('click', () => setCameraView(new THREE.Vector3(0, 2.3, 2.9), new THREE.Vector3(0, 0.7, BOWL_CENTER_Z)));
+            document.getElementById('cam-preset-2').addEventListener('click', () => setCameraView(new THREE.Vector3(0, 3.2, 0.01), new THREE.Vector3(0, 0.5, BOWL_CENTER_Z)));
+            document.getElementById('cam-preset-3').addEventListener('click', () => setCameraView(new THREE.Vector3(2.8, 1.2, BOWL_CENTER_Z), new THREE.Vector3(0, 0.7, BOWL_CENTER_Z)));
+            document.getElementById('cam-preset-4').addEventListener('click', () => setCameraView(new THREE.Vector3(0, 1.25, 0.95), new THREE.Vector3(0, 0.62, BOWL_CENTER_Z)));
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setPixelRatio(getRenderPixelRatio());
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Shared resources stay alive for the lifetime of the scene.
+        const fxDropGeometry = new THREE.SphereGeometry(0.012, 16, 10);
+        const rippleRadiusUniform = new THREE.Vector2(0.24, 0.276);
+        const fluidAxis = new THREE.Vector3(0, 1, 0);
+        const fluidVelocity = new THREE.Vector3();
+        const crowns = [], stoolFragments = [];
+        let runoffClock = 0;
+
+        function insideWater(x, z) {
+            const h = Math.min(RIM_HEIGHT + 0.012, state.waterLevel);
+            const r = 0.33 * (0.5 + Math.max(0, Math.min(1, (h - 0.28) / (RIM_HEIGHT - 0.28))) * 0.52);
+            return (x / r) ** 2 + ((z - BOWL_CENTER_Z) / (r * 1.15)) ** 2 <= 1;
+        }
+
+        function orientFluidDrop(mesh, size) {
+            const u = mesh.userData;
+            fluidVelocity.set(u.vx, u.vy, u.vz);
+            const speed = fluidVelocity.length();
+            if (speed > 0.0001) mesh.quaternion.setFromUnitVectors(fluidAxis, fluidVelocity.multiplyScalar(1 / speed));
+            const stretch = Math.min(3.2, 1 + speed * 0.55);
+            mesh.scale.set(size / Math.sqrt(stretch), size * stretch, size / Math.sqrt(stretch));
+        }
+
+        function createImpactCrown(pos) {
+            if (crowns.length >= 12) return;
+            const geo = new THREE.CylinderGeometry(0.055, 0.024, 0.06, 64, 1, true);
+            const attr = geo.attributes.position;
+            for (let i = 0; i < attr.count; i++) {
+                if (attr.getY(i) > 0) {
+                    const a = Math.atan2(attr.getZ(i), attr.getX(i));
+                    attr.setY(i, 0.025 + Math.pow(0.5 + 0.5 * Math.sin(a * 11), 3) * 0.055);
+                }
+            }
+            geo.computeVertexNormals();
+            const mat = new THREE.MeshPhysicalMaterial({color: waterMaterial.color, transparent: true,
+                opacity: 0.65, roughness: 0.05, clearcoat: 1, side: THREE.DoubleSide, depthWrite: false});
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.copy(pos); scene.add(mesh);
+            crowns.push({mesh, age: 0});
+        }
+
+        function createStoolFragments(pos, color, count) {
+            for (let i = 0; i < count && stoolFragments.length < 140; i++) {
+                const mat = new THREE.MeshPhysicalMaterial({color: color || 0x4a2810,
+                    roughness: 0.3, clearcoat: 0.85, bumpMap: proceduralTextures.stoolBump,
+                    bumpScale: 0.002, transparent: true, depthWrite: false});
+                const mesh = new THREE.Mesh(fxDropGeometry, mat);
+                mesh.position.copy(pos);
+                const a = Math.random() * Math.PI * 2;
+                mesh.userData = {vx: Math.cos(a) * (0.15 + Math.random() * 0.3),
+                    vy: 0.25 + Math.random() * 0.55, vz: Math.sin(a) * (0.15 + Math.random() * 0.3),
+                    age: 0, size: 0.35 + Math.random() * 0.65};
+                mesh.scale.set(mesh.userData.size, mesh.userData.size * 0.7, mesh.userData.size * 1.3);
+                scene.add(mesh); stoolFragments.push(mesh);
+            }
+        }
+
+        function createRunoff(angle) {
+            if (state.spillCascades.length >= 24) return;
+            // Follow the original lathe's exterior, not a straight line through porcelain.
+            const profile = [[0.427,0.785],[0.428,0.745],[0.367,0.59],
+                [0.29,0.35],[0.31,0.20],[0.35,0.018]];
+            const path = new THREE.CatmullRomCurve3(profile.map(([r,y]) =>
+                new THREE.Vector3(Math.cos(angle)*r,y,BOWL_CENTER_Z+Math.sin(angle)*r*1.18)));
+            const geo = new THREE.TubeGeometry(path, 36, 0.006 + Math.random()*0.004, 7, false);
+            const mat = new THREE.MeshPhysicalMaterial({color: waterMaterial.color, transparent:true,
+                opacity:0.55, roughness:0.06, clearcoat:1, depthWrite:false});
+            const mesh = new THREE.Mesh(geo, mat);
+            geo.setDrawRange(0, 0); scene.add(mesh);
+            state.spillCascades.push({mesh, age:0, duration:1.3+Math.random(), end:path.getPoint(1), landed:false});
+        }
+
+        function updateEnhancedEffects(dt) {
+            for (let i = crowns.length - 1; i >= 0; i--) {
+                const c = crowns[i]; c.age += dt;
+                const t = c.age / 0.45;
+                if (t >= 1) {
+                    scene.remove(c.mesh); c.mesh.geometry.dispose(); c.mesh.material.dispose(); crowns.splice(i,1);
+                } else {
+                    c.mesh.position.y = getWaterSurfaceY() + 0.015;
+                    c.mesh.scale.set(0.7+t*1.5, Math.max(0.02, Math.sin(Math.PI*t)), 0.7+t*1.5);
+                    c.mesh.material.opacity = 0.7*(1-t);
+                }
+            }
+            for (let i = stoolFragments.length - 1; i >= 0; i--) {
+                const m = stoolFragments[i], u = m.userData; u.age += dt;
+                if (!u.settled) {
+                    m.position.x += u.vx*dt; m.position.y += u.vy*dt; m.position.z += u.vz*dt;
+                    u.vy -= 4.9*dt; m.rotation.x += dt*3;
+                    if (u.vy < 0 && insideWater(m.position.x,m.position.z) && m.position.y <= getWaterSurfaceY()) {
+                        u.settled = 'water'; createWaterRipple(m.position.x,m.position.z,0.07,0.4);
+                    } else if (m.position.y <= 0.009) {
+                        u.settled = 'floor'; m.position.y=0.009;
+                        createFloorSplatter(m.position,m.material.color.getHex(),0.018*u.size);
+                    }
+                } else if (u.settled === 'water') {
+                    m.position.y = getWaterSurfaceY() - Math.min(0.05,u.age*0.012);
+                    if (state.isFlushing) { m.position.x *= Math.exp(-dt); m.position.z += (BOWL_CENTER_Z-m.position.z)*dt; }
+                }
+                m.material.opacity = Math.max(0,1-u.age/3);
+                if (u.age >= 3) {scene.remove(m); m.material.dispose(); stoolFragments.splice(i,1);}
+            }
+            if (state.waterLevel >= RIM_HEIGHT-0.002) {
+                runoffClock += dt;
+                while (runoffClock >= 0.12) {runoffClock -= 0.12; createRunoff(Math.random()*Math.PI*2);}
+            } else runoffClock = 0;
+            for (let i = state.spillCascades.length-1; i>=0; i--) {
+                const c=state.spillCascades[i]; c.age+=dt;
+                const total=c.mesh.geometry.index.count;
+                c.mesh.geometry.setDrawRange(0,Math.floor(total*Math.min(1,c.age/0.6)/3)*3);
+                c.mesh.material.opacity=0.6*Math.min(1, Math.max(0,(c.duration-c.age)/0.4));
+                if (!c.landed && c.age>=0.6) {
+                    c.landed=true; createFloorSplatter(c.end,c.mesh.material.color.getHex(),0.045);
+                }
+                if (c.age>=c.duration) {
+                    scene.remove(c.mesh); c.mesh.geometry.dispose(); c.mesh.material.dispose(); state.spillCascades.splice(i,1);
+                }
+            }
+        }
+
+        let lastTime = performance.now();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const now = performance.now();
+            const dt = Math.min(0.05, (now - lastTime) / 1000);
+            lastTime = now;
+
+            const hingeEase = 1 - Math.pow(0.88, dt * 60);
+            state.currentSeatAngle += (state.targetSeatAngle - state.currentSeatAngle) * hingeEase;
+            state.currentLidAngle += (state.targetLidAngle - state.currentLidAngle) * hingeEase;
+            seatGroup.rotation.x = state.currentSeatAngle;
+            lidGroup.rotation.x = state.currentLidAngle;
+
+            scene.updateMatrixWorld(true);
+            emitPeeParticles(dt);
+            
+            updatePeeParticles(dt);
+            updatePoopPhysics(dt);
+            updateSplatters(dt);
+            updateOverflowMechanics(dt);
+            updateFlushSequence(dt);
+            updateWaterEffects(dt);
+            updateVisuals();
+            updateEnhancedEffects(dt);
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.onload = () => {
+            initScene();
+            initEnvironment();
+            createToiletGeometry();
+            setupUIListeners();
+            animate();
+        };
+    </script>
+</body>
+</html>
