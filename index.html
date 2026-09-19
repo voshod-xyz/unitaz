@@ -575,6 +575,33 @@
             tankMesh.receiveShadow = true;
             tankGroup.add(tankMesh);
 
+            // Small printed brand mark on the front face of the tank.
+            const brandCanvas = document.createElement('canvas');
+            brandCanvas.width = 512;
+            brandCanvas.height = 160;
+            const brandContext = brandCanvas.getContext('2d');
+            brandContext.clearRect(0, 0, 512, 160);
+            brandContext.fillStyle = '#52616b';
+            brandContext.font = '500 100px Georgia, serif';
+            brandContext.textAlign = 'center';
+            brandContext.textBaseline = 'middle';
+            brandContext.fillText('unitas', 256, 82);
+            const brandTexture = new THREE.CanvasTexture(brandCanvas);
+            brandTexture.encoding = THREE.sRGBEncoding;
+            brandTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+            const brandMaterial = new THREE.MeshBasicMaterial({
+                map: brandTexture,
+                transparent: true,
+                depthWrite: false,
+                toneMapped: false,
+                polygonOffset: true,
+                polygonOffsetFactor: -1,
+                polygonOffsetUnits: -1
+            });
+            const brandLogo = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.05), brandMaterial);
+            brandLogo.position.set(0, 0.25, 0.221);
+            tankGroup.add(brandLogo);
+
             const tankLidGeo = new THREE.BoxGeometry(0.86, 0.10, 0.48);
             const tankLidMesh = new THREE.Mesh(tankLidGeo, porcelainMat);
             tankLidMesh.position.set(0, 0.49, 0);
